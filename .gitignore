@@ -1,5 +1,4 @@
 # Binarios y artefactos de compilación
-*.exe
 *.dll
 *.pdb
 bin/
