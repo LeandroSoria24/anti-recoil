@@ -965,6 +965,21 @@ namespace RecoilStudio
             multiToolbar.Children.Add(lblMultiHint);
 
             StackPanel multiBtns = new StackPanel { Orientation = Orientation.Horizontal };
+            Button btnDrawPattern = new Button
+            {
+                Style = (Style)Resources["SecondaryButton"],
+                Height = 26,
+                Padding = new Thickness(9, 2, 9, 2),
+                Margin = new Thickness(0, 0, 6, 0),
+                ToolTip = "Abrir editor visual para dibujar la curva"
+            };
+            StackPanel drawContent = new StackPanel { Orientation = Orientation.Horizontal };
+            drawContent.Children.Add(ThemeResources.CreateVectorIcon(ThemeResources.IconPencilData, ThemeResources.AccentBrush, 11, 2.0));
+            drawContent.Children.Add(new TextBlock { Text = "Dibujar", FontSize = 11, Margin = new Thickness(5, 0, 0, 0) });
+            btnDrawPattern.Content = drawContent;
+            btnDrawPattern.Click += delegate { OpenPatternEditor(); };
+            multiBtns.Children.Add(btnDrawPattern);
+
             Button btnSortPhases = new Button
             {
                 Style = (Style)Resources["SecondaryButton"],
@@ -998,7 +1013,14 @@ namespace RecoilStudio
             _panelMultiPhase.Children.Add(multiToolbar);
 
             _multiPhaseRowsPanel = new StackPanel();
-            _panelMultiPhase.Children.Add(_multiPhaseRowsPanel);
+            ScrollViewer multiScroll = new ScrollViewer
+            {
+                MaxHeight = 225,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                Content = _multiPhaseRowsPanel
+            };
+            _panelMultiPhase.Children.Add(multiScroll);
             stack.Children.Add(_panelMultiPhase);
 
             card.Child = stack;
@@ -1112,21 +1134,50 @@ namespace RecoilStudio
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
 
+            StackPanel titleCol = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
             TextBlock title = CreateSectionTitle("VISTA PREVIA DE PATRÓN");
             title.Margin = new Thickness(0);
-            Grid.SetColumn(title, 0);
-            header.Children.Add(title);
+            titleCol.Children.Add(title);
 
-            StackPanel legend = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-            legend.Children.Add(CreateLegendDot(ThemeResources.DangerBrush, "Recoil"));
-            legend.Children.Add(CreateLegendDot(ThemeResources.AccentBrush, "Comp."));
-            Grid.SetColumn(legend, 1);
-            header.Children.Add(legend);
+            StackPanel legend = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 0) };
+            legend.Children.Add(CreateLegendDot(new SolidColorBrush(Color.FromRgb(251, 191, 36)), "Inicio 1"));
+            legend.Children.Add(CreateLegendDot(ThemeResources.DangerBrush, "Fin"));
+            titleCol.Children.Add(legend);
+
+            Grid.SetColumn(titleCol, 0);
+            header.Children.Add(titleCol);
+
+            Button btnDraw = new Button
+            {
+                Style = (Style)Resources["SecondaryButton"],
+                Height = 26,
+                Padding = new Thickness(9, 2, 10, 2),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(90, 56, 189, 248)),
+                Background = ThemeResources.AccentSoftBrush,
+                Foreground = ThemeResources.AccentBrush,
+                ToolTip = "Dibujar o editar el patrón visualmente"
+            };
+            StackPanel drawBtnContent = new StackPanel { Orientation = Orientation.Horizontal };
+            drawBtnContent.Children.Add(ThemeResources.CreateVectorIcon(ThemeResources.IconPencilData, ThemeResources.AccentBrush, 11.5, 1.9));
+            drawBtnContent.Children.Add(new TextBlock { Text = "Dibujar", FontSize = 11.5, FontWeight = FontWeights.SemiBold, Margin = new Thickness(5, 0, 0, 0) });
+            btnDraw.Content = drawBtnContent;
+            btnDraw.Click += delegate { OpenPatternEditor(); };
+            Grid.SetColumn(btnDraw, 1);
+            header.Children.Add(btnDraw);
             stack.Children.Add(header);
 
             _visualizer = new RecoilVisualizer
             {
-                Height = 278
+                Height = 274,
+                Cursor = Cursors.Hand,
+                ToolTip = "Doble clic o usa 'Dibujar' para abrir el editor visual de patrón"
+            };
+            _visualizer.MouseLeftButtonDown += delegate(object s, MouseButtonEventArgs e)
+            {
+                if (e.ClickCount == 2)
+                {
+                    OpenPatternEditor();
+                }
             };
             stack.Children.Add(_visualizer);
 
@@ -1544,13 +1595,13 @@ namespace RecoilStudio
 
                 g.Children.Add(CreatePhaseInputField(2, "Vert", step.patea_arriba.ToString("F2", CultureInfo.InvariantCulture), delegate(double v)
                 {
-                    step.patea_arriba = Math.Max(0.0, Math.Min(30.0, v));
+                    step.patea_arriba = Math.Max(-15.0, Math.Min(30.0, v));
                     OnPhaseStepEdited();
                 }));
 
                 g.Children.Add(CreatePhaseInputField(3, "Horiz", step.se_va_lado.ToString("F2", CultureInfo.InvariantCulture), delegate(double v)
                 {
-                    step.se_va_lado = Math.Max(-10.0, Math.Min(10.0, v));
+                    step.se_va_lado = Math.Max(-20.0, Math.Min(20.0, v));
                     OnPhaseStepEdited();
                 }));
 
@@ -1677,6 +1728,22 @@ namespace RecoilStudio
             _visualizer.SetProfile(p);
             PushEngineSnapshot();
             ScheduleSave();
+        }
+
+        private void OpenPatternEditor()
+        {
+            WeaponProfile current = GetActiveProfile();
+            if (current == null || _config == null || string.IsNullOrEmpty(_config.active_profile)) return;
+
+            PatternEditorWindow dlg = new PatternEditorWindow(this, _config.active_profile, current);
+            if (dlg.ShowDialog() == true && dlg.ResultProfile != null)
+            {
+                _config.profiles[_config.active_profile] = dlg.ResultProfile.Clone();
+                SyncActiveProfileToUI();
+                RefreshProfileList();
+                PushEngineSnapshot();
+                ScheduleSave();
+            }
         }
 
         private void OnPhaseStepEdited()

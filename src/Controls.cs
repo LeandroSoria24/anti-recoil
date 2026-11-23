@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
@@ -584,16 +585,15 @@ namespace RecoilStudio
         private RecoilStep[] _sortedSteps;
         private EngineTelemetry _telemetry = EngineTelemetry.Idle;
 
-        private static readonly Brush CanvasBgBrush = FreezeBrush(Color.FromRgb(15, 18, 25));
+        private static readonly Brush CanvasBgBrush = FreezeBrush(Color.FromRgb(12, 15, 22));
         private static readonly Pen BorderPen = FreezePen(Color.FromRgb(37, 42, 56), 1.0);
-        private static readonly Pen GridPen = FreezePen(Color.FromRgb(24, 29, 40), 1.0);
-        private static readonly Pen AxisPen = FreezePen(Color.FromRgb(42, 50, 68), 1.0);
-        private static readonly Pen RecoilPen = CreateDashedPen(Color.FromArgb(170, 244, 63, 94), 1.6);
-        private static readonly Pen CompGlowPen = FreezePen(Color.FromArgb(65, 56, 189, 248), 5.0);
-        private static readonly Pen CompPen = FreezePen(Color.FromRgb(56, 189, 248), 2.2);
+        private static readonly Pen GridPen = FreezePen(Color.FromRgb(22, 27, 38), 1.0);
+        private static readonly Pen AxisPen = FreezePen(Color.FromRgb(40, 48, 66), 1.0);
+        private static readonly Pen NodeStrokePen = FreezePen(Color.FromRgb(12, 15, 22), 1.4);
         private static readonly Brush PhaseNodeBrush = FreezeBrush(Color.FromRgb(245, 158, 11));
+        private static readonly Brush BulletDotBrush = FreezeBrush(Color.FromRgb(248, 250, 252));
         private static readonly Brush ActiveDotBrush = FreezeBrush(Color.FromRgb(34, 197, 94));
-        private static readonly Brush ActiveGlowBrush = FreezeBrush(Color.FromArgb(80, 34, 197, 94));
+        private static readonly Brush ActiveGlowBrush = FreezeBrush(Color.FromArgb(85, 34, 197, 94));
         private static readonly Typeface MonoTypeface = new Typeface(new FontFamily("Consolas"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
         private static readonly Typeface UiTypeface = new Typeface(new FontFamily("Segoe UI"), FontStyles.Normal, FontWeights.SemiBold, FontStretches.Normal);
 
@@ -631,45 +631,47 @@ namespace RecoilStudio
             // Fondo y borde redondeado
             dc.DrawRoundedRectangle(CanvasBgBrush, BorderPen, new Rect(0.5, 0.5, w - 1.0, h - 1.0), 8.0, 8.0);
 
-            // Cuadricula sutil
-            double stepGrid = 28.0;
-            double cx = w * 0.5;
-            double cy = h * 0.5;
-
-            for (double x = cx % stepGrid; x < w - 4.0; x += stepGrid)
-            {
-                dc.DrawLine(GridPen, new Point(x, 6), new Point(x, h - 6));
-            }
-            for (double y = cy % stepGrid; y < h - 4.0; y += stepGrid)
-            {
-                dc.DrawLine(GridPen, new Point(6, y), new Point(w - 6, y));
-            }
-
-            // Ejes principales
-            dc.DrawLine(AxisPen, new Point(8, cy), new Point(w - 8, cy));
-            dc.DrawLine(AxisPen, new Point(cx, 8), new Point(cx, h - 8));
-
             if (_profile == null)
             {
                 return;
             }
 
-            // Simular 1500ms en ticks de 8ms (188 pasos)
-            const double simDurationMs = 1500.0;
+            // Calcular duracion representativa del perfil
+            double simDurationMs = 1500.0;
+            if (_profile.cambia_de_lado)
+            {
+                if (_sortedSteps != null && _sortedSteps.Length > 0)
+                {
+                    RecoilStep lastStep = _sortedSteps[_sortedSteps.Length - 1];
+                    if (Math.Abs(lastStep.patea_arriba) < 0.001 && Math.Abs(lastStep.se_va_lado) < 0.001)
+                    {
+                        simDurationMs = Clamp(lastStep.tiempo_ms, 300.0, 4000.0);
+                    }
+                    else
+                    {
+                        simDurationMs = Clamp(Math.Max(1500.0, lastStep.tiempo_ms + 300.0), 300.0, 4000.0);
+                    }
+                }
+                else
+                {
+                    simDurationMs = Clamp(Math.Max(1500.0, _profile.tiempo_cambio_ms + 500.0), 500.0, 4000.0);
+                }
+            }
+
             const double tickMs = 8.0;
-            int totalTicks = (int)(simDurationMs / tickMs);
+            int totalTicks = Math.Max(1, (int)Math.Ceiling(simDurationMs / tickMs));
 
             Point[] compPoints = new Point[totalTicks + 1];
-            Point[] recoilPoints = new Point[totalTicks + 1];
             int[] phases = new int[totalTicks + 1];
 
             double curX = 0.0;
             double curY = 0.0;
-            double maxAbsX = 18.0;
-            double maxAbsY = 18.0;
+            double minX = 0.0;
+            double maxX = 0.0;
+            double minY = 0.0;
+            double maxY = 0.0;
 
             compPoints[0] = new Point(0, 0);
-            recoilPoints[0] = new Point(0, 0);
             phases[0] = -1;
 
             for (int i = 1; i <= totalTicks; i++)
@@ -684,53 +686,114 @@ namespace RecoilStudio
                 curY += dy;
 
                 compPoints[i] = new Point(curX, curY);
-                recoilPoints[i] = new Point(-curX, -curY);
                 phases[i] = phaseIdx;
 
-                double absX = Math.Abs(curX);
-                double absY = Math.Abs(curY);
-                if (absX > maxAbsX) maxAbsX = absX;
-                if (absY > maxAbsY) maxAbsY = absY;
+                if (curX < minX) minX = curX;
+                if (curX > maxX) maxX = curX;
+                if (curY < minY) minY = curY;
+                if (curY > maxY) maxY = curY;
             }
 
-            double scaleX = (w * 0.41) / maxAbsX;
-            double scaleY = (h * 0.40) / maxAbsY;
-            double scale = Math.Min(scaleX, scaleY);
+            double availW = Math.Max(40.0, w - 52.0);
+            double availH = Math.Max(40.0, h - 56.0);
+            double spanX = Math.Max(45.0, maxX - minX);
+            double spanY = Math.Max(45.0, maxY - minY);
+            double scale = Math.Min(availW / spanX, availH / spanY);
 
-            // Construir geometria de recoil (arriba) y compensacion (abajo)
-            StreamGeometry recoilGeom = BuildPathGeometry(recoilPoints, cx, cy, scale);
-            StreamGeometry compGeom = BuildPathGeometry(compPoints, cx, cy, scale);
+            double ox = w * 0.5 - ((minX + maxX) * 0.5) * scale;
+            double oy = 22.0 + (availH - (maxY - minY) * scale) * 0.5 - minY * scale;
 
-            dc.DrawGeometry(null, RecoilPen, recoilGeom);
-            dc.DrawGeometry(null, CompGlowPen, compGeom);
-            dc.DrawGeometry(null, CompPen, compGeom);
+            // Cuadricula sutil alineada con el origen 1
+            double stepGrid = 28.0;
+            for (double x = (ox % stepGrid + stepGrid) % stepGrid; x < w - 4.0; x += stepGrid)
+            {
+                dc.DrawLine(GridPen, new Point(x, 6), new Point(x, h - 6));
+            }
+            for (double y = (oy % stepGrid + stepGrid) % stepGrid; y < h - 4.0; y += stepGrid)
+            {
+                dc.DrawLine(GridPen, new Point(6, y), new Point(w - 6, y));
+            }
 
-            // Marcar transiciones de fase sobre la curva de compensacion
+            dc.DrawLine(AxisPen, new Point(8, oy), new Point(w - 8, oy));
+            dc.DrawLine(AxisPen, new Point(ox, 8), new Point(ox, h - 8));
+
+            // Curva degradada ambar -> naranja -> rojo estilo patron numerado
+            int stride = Math.Max(1, totalTicks / 75);
+            List<Point> sampledPts = new List<Point>();
+            sampledPts.Add(new Point(ox + compPoints[0].X * scale, oy + compPoints[0].Y * scale));
+            for (int i = stride; i < totalTicks; i += stride)
+            {
+                sampledPts.Add(new Point(ox + compPoints[i].X * scale, oy + compPoints[i].Y * scale));
+            }
+            sampledPts.Add(new Point(ox + compPoints[totalTicks].X * scale, oy + compPoints[totalTicks].Y * scale));
+
+            int segCount = sampledPts.Count - 1;
+            for (int i = 0; i < segCount; i++)
+            {
+                double frac = (double)i / Math.Max(1, segCount - 1);
+                Color col = PatternGeometry.GetColorAlongCurve(frac);
+
+                Pen glowPen = new Pen(new SolidColorBrush(Color.FromArgb(46, col.R, col.G, col.B)), 5.4);
+                glowPen.StartLineCap = PenLineCap.Round;
+                glowPen.EndLineCap = PenLineCap.Round;
+
+                Pen corePen = new Pen(new SolidColorBrush(col), 2.3);
+                corePen.StartLineCap = PenLineCap.Round;
+                corePen.EndLineCap = PenLineCap.Round;
+
+                dc.DrawLine(glowPen, sampledPts[i], sampledPts[i + 1]);
+                dc.DrawLine(corePen, sampledPts[i], sampledPts[i + 1]);
+            }
+
+            // Contar transiciones de fase para decidir densidad de etiquetas
+            int transitionCount = 0;
             for (int i = 1; i <= totalTicks; i++)
             {
-                if (phases[i] != phases[i - 1] && phases[i] >= 0)
-                {
-                    Point pt = new Point(cx + compPoints[i].X * scale, cy + compPoints[i].Y * scale);
-                    dc.DrawEllipse(PhaseNodeBrush, null, pt, 4.0, 4.0);
-
-                    string phaseTimeText = ((int)Math.Round(i * tickMs)).ToString() + "ms";
-                    FormattedText ft = CreateText(phaseTimeText, MonoTypeface, 9.5, ThemeResources.WarningBrush);
-                    double tx = pt.X + 7.0;
-                    if (tx + ft.Width > w - 8.0) tx = pt.X - ft.Width - 7.0;
-                    double ty = pt.Y - ft.Height * 0.5;
-                    dc.DrawText(ft, new Point(tx, ty));
-                }
+                if (phases[i] != phases[i - 1] && phases[i] >= 0) transitionCount++;
             }
 
-            // Punto de origen central
-            dc.DrawEllipse(Brushes.White, BorderPen, new Point(cx, cy), 3.2, 3.2);
+            if (transitionCount <= 3)
+            {
+                for (int i = 1; i <= totalTicks; i++)
+                {
+                    if (phases[i] != phases[i - 1] && phases[i] >= 0)
+                    {
+                        Point pt = new Point(ox + compPoints[i].X * scale, oy + compPoints[i].Y * scale);
+                        dc.DrawEllipse(PhaseNodeBrush, NodeStrokePen, pt, 3.6, 3.6);
+
+                        string phaseTimeText = ((int)Math.Round(i * tickMs)).ToString() + "ms";
+                        FormattedText ft = CreateText(phaseTimeText, MonoTypeface, 9.5, ThemeResources.WarningBrush);
+                        double tx = pt.X + 7.0;
+                        if (tx + ft.Width > w - 8.0) tx = pt.X - ft.Width - 7.0;
+                        double ty = pt.Y - ft.Height * 0.5;
+                        dc.DrawText(ft, new Point(tx, ty));
+                    }
+                }
+            }
+            else
+            {
+                // Hito intermedio discreto para curvas multi-fase densas
+                int midIdx = totalTicks / 2;
+                Point midPt = new Point(ox + compPoints[midIdx].X * scale, oy + compPoints[midIdx].Y * scale);
+                dc.DrawEllipse(BulletDotBrush, NodeStrokePen, midPt, 2.8, 2.8);
+            }
+
+            // Punto de origen "1" arriba
+            Point startPt = new Point(ox, oy);
+            dc.DrawEllipse(BulletDotBrush, NodeStrokePen, startPt, 3.4, 3.4);
+            FormattedText oneFt = CreateText("1", MonoTypeface, 10.5, ThemeResources.TextPrimaryBrush);
+            dc.DrawText(oneFt, new Point(startPt.X + 7.0, Math.Max(6.0, startPt.Y - 7.0)));
+
+            // Punto final
+            Point endPt = new Point(ox + compPoints[totalTicks].X * scale, oy + compPoints[totalTicks].Y * scale);
+            dc.DrawEllipse(ThemeResources.DangerBrush, NodeStrokePen, endPt, 3.4, 3.4);
 
             // Marcador en vivo durante la rafaga activa
             if (_telemetry != null && _telemetry.IsCompensating)
             {
                 double clampedMs = Math.Min(_telemetry.ElapsedBurstMs, simDurationMs);
                 int idx = (int)Math.Min(totalTicks, Math.Max(0, Math.Round(clampedMs / tickMs)));
-                Point activePt = new Point(cx + compPoints[idx].X * scale, cy + compPoints[idx].Y * scale);
+                Point activePt = new Point(ox + compPoints[idx].X * scale, oy + compPoints[idx].Y * scale);
 
                 dc.DrawEllipse(ActiveGlowBrush, null, activePt, 9.0, 9.0);
                 dc.DrawEllipse(ActiveDotBrush, null, activePt, 4.5, 4.5);
@@ -740,25 +803,15 @@ namespace RecoilStudio
                 dc.DrawText(liveFt, new Point(w - liveFt.Width - 13, 10));
             }
 
-            // Metrica inferior discreta de desplazamiento total estimado en 1.5s
-            string info = string.Format("1.5s  ΔX {0:+0;-0;0}px  ΔY {1:0}px", Math.Round(curX), Math.Round(curY));
+            // Metrica inferior discreta de desplazamiento total estimado
+            string info = string.Format(
+                CultureInfo.InvariantCulture,
+                "{0:F1}s  ΔX {1:+0;-0;0}px  ΔY {2:0}px",
+                simDurationMs / 1000.0,
+                Math.Round(curX),
+                Math.Round(curY));
             FormattedText infoFt = CreateText(info, MonoTypeface, 10.0, ThemeResources.TextMutedBrush);
             dc.DrawText(infoFt, new Point(10, h - infoFt.Height - 7));
-        }
-
-        private static StreamGeometry BuildPathGeometry(Point[] pts, double cx, double cy, double scale)
-        {
-            StreamGeometry geom = new StreamGeometry();
-            using (StreamGeometryContext ctx = geom.Open())
-            {
-                ctx.BeginFigure(new Point(cx + pts[0].X * scale, cy + pts[0].Y * scale), false, false);
-                for (int i = 1; i < pts.Length; i++)
-                {
-                    ctx.LineTo(new Point(cx + pts[i].X * scale, cy + pts[i].Y * scale), true, true);
-                }
-            }
-            geom.Freeze();
-            return geom;
         }
 
         private FormattedText CreateText(string text, Typeface typeface, double size, Brush brush)
@@ -800,15 +853,11 @@ namespace RecoilStudio
             return p;
         }
 
-        private static Pen CreateDashedPen(Color c, double thickness)
+        private static double Clamp(double val, double min, double max)
         {
-            SolidColorBrush b = FreezeBrush(c);
-            Pen p = new Pen(b, thickness);
-            p.DashStyle = new DashStyle(new double[] { 4.0, 4.0 }, 0.0);
-            p.StartLineCap = PenLineCap.Round;
-            p.EndLineCap = PenLineCap.Round;
-            p.Freeze();
-            return p;
+            if (val < min) return min;
+            if (val > max) return max;
+            return val;
         }
     }
 }

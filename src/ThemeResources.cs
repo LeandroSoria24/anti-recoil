@@ -75,6 +75,11 @@ namespace RecoilStudio
         public const string IconKeyboardData = "M3,6 L21,6 L21,18 L3,18 Z M6.5,10 L8,10 M11,10 L13,10 M16,10 L17.5,10 M7.5,14 L16.5,14";
         public const string IconSortData = "M4,7 L20,7 M4,12 L15,12 M4,17 L10,17";
         public const string IconCheckData = "M4.5,12.5 L9.5,17.5 L19.5,6.5";
+        public const string IconPencilData = "M3,21 L7.5,19.8 L19.5,7.8 L16.2,4.5 L4.2,16.5 Z M14,6.7 L17.3,10";
+        public const string IconPlayData = "M7,5 L19,12 L7,19 Z";
+        public const string IconStopData = "M6,6 L18,6 L18,18 L6,18 Z";
+        public const string IconUndoData = "M9,7 L4,12 L9,17 M4,12 L15,12 A5,5 0 1,1 15,20 L12,20";
+        public const string IconFlipData = "M12,4 L12,20 M8,8 L4,12 L8,16 M16,8 L20,12 L16,16";
 
         private static SolidColorBrush Freeze(SolidColorBrush brush)
         {

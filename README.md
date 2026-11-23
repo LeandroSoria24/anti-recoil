@@ -10,7 +10,8 @@ Aplicación de escritorio en **WPF (.NET Framework 4.8)** para gestionar perfile
   - **Lineal**: vector constante durante toda la ráfaga.
   - **2 Fases**: transición horizontal configurable por tiempo (`100–2000 ms`).
   - **Multi-Fase**: secuencia cronológica ilimitada de pasos (`Ms`, `Vert`, `Horiz`) con ordenamiento automático.
-- **Visualizador vectorial y telemetría en vivo**: simulación de trayectoria de `1.5 s` con nodos de cambio de fase y métricas en tiempo real (`Estado`, `Ráfaga`, `Vector X/Y`, `Fase`).
+- **Visualizador vectorial y telemetría en vivo**: curva degradada ámbar-naranja-rojo con origen `1` y métricas en tiempo real (`Estado`, `Ráfaga`, `Vector X/Y`, `Fase`).
+- **Editor visual de patrones**: dibuja la curva a mano alzada con el mouse, edita nodos de control, simula la ráfaga (`1 → 30`), carga plantillas (`AK-47`, `M4A4`, `MP7`, etc.) y convierte el trazo a pasos Multi-Fase sin pérdida.
 - **Motor lock-free de baja latencia**: instantáneas inmutables (`EngineSnapshot`), normalización por *delta-time*, espera híbrida (`Thread.Sleep(1)` + `SpinWait`) con `timeBeginPeriod(1)` y suavizado gaussiano con amortiguación de deriva.
 - **Atajos globales por flanco de subida**: tecla/botón para activar/pausar el motor y macro rápida para alternar entre perfil A y perfil B.
 
@@ -38,5 +39,7 @@ Aplicación de escritorio en **WPF (.NET Framework 4.8)** para gestionar perfile
 - `src/RecoilEngine.cs` — Bucle de compensación en tiempo real y evaluación vectorial compartida.
 - `src/ThemeResources.cs` — Paleta, estilos WPF oscuros e iconos vectoriales.
 - `src/Controls.cs` — Controles personalizados `ModernSlider` y `RecoilVisualizer`.
+- `src/PatternGeometry.cs` — Conversión bidireccional de curvas 2D, plantillas de armas y suavizado de trazos.
+- `src/PatternEditorWindow.cs` — Editor visual interactivo de patrones (`PatternCanvas` y `PatternEditorWindow`).
 - `src/ProfileDialog.cs` — Diálogos modales oscuros sin bordes.
 - `src/MainWindow.cs` — Ventana principal, lista de perfiles, calibración y telemetría.
